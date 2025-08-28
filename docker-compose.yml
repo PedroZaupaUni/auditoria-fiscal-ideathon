@@ -1,0 +1,48 @@
+# Define a versão do Docker Compose a ser usada. A '3.8' é moderna e estável.
+version: '3.8'
+
+# 'services' é a seção onde definimos cada contêiner da nossa aplicação.
+services:
+  # 1. Serviço do Banco de Dados (PostgreSQL)
+  database:
+    image: postgres:14-alpine # Usa uma imagem oficial e leve do PostgreSQL.
+    container_name: auditoria-db
+    environment:
+      # Define variáveis de ambiente para configurar o banco de dados na primeira vez que ele é criado.
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: auditoria_fiscal
+    volumes:
+      # O primeiro volume executa nosso script SQL para criar as tabelas quando o contêiner inicia.
+      # O segundo volume persiste os dados do banco no seu computador, para que não se percam.
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Mapeia a porta 5432 do contêiner para a porta 5432 da sua máquina.
+      - "5432:5432"
+
+  # 2. Serviço de Backend (Java/Spring Boot)
+  backend-java:
+    # 'build: .' instrui o Docker a procurar um 'Dockerfile' na pasta atual e construir a imagem.
+    build: ./backend-java
+    container_name: backend-java
+    depends_on:
+      - database # Garante que o contêiner do banco de dados inicie antes do backend.
+    ports:
+      - "8080:8080"
+    environment:
+      # Passa as credenciais do banco para a aplicação Java, para que ela possa se conectar.
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://database:5432/auditoria_fiscal
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=password123
+  
+  # 3. Serviço de Inteligência Artificial (Python/Flask)
+  ia-python:
+    build: ./ia-python
+    container_name: ia-python
+    ports:
+      - "5000:5000"
+
+# 'volumes' define um local nomeado para persistir os dados do banco de dados.
+volumes:
+  postgres_data:
